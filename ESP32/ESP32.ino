@@ -10,11 +10,13 @@
 #include <WiFiMulti.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
-#include <LiquidCrystal_I2C.h>
+// #include <LiquidCrystal_I2C.h>
 
 // Set the pins on the I2C chip used for LCD connections:
 //                    addr, en,rw,rs,d4,d5,d6,d7,bl,blpol
-LiquidCrystal_I2C lcd(0x27, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);  // 設定 LCD I2C 位址
+
+//LiquidCrystal_I2C lcd(0x27, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);  // 設定 LCD I2C 位址 julie
+// LiquidCrystal_I2C lcd(0x3F, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);  // 設定 LCD I2C 位址  jonson
 
 
 #include "BLINKER_PMSX003ST.h"
@@ -27,35 +29,62 @@ SoftwareSerial pmsSerial(4,5);
 BLINKER_PMSX003ST pms;
 
 static int send_data_to_server = 20;
-static int turn_off_backlight=600;
+static int pms_error = 0;
 
-// This is GandiStandardSSLCA2.pem, the root Certificate Authority that signed 
-// the server certifcate for the demo server https://jigsaw.w3.org in this
-// example. This certificate is valid until Sep 11 23:59:59 2024 GMT
+
+
+//CA 到期日  2023年8月4日 星期五 清晨7:59:59
 const char* rootCACertificate = \
 "-----BEGIN CERTIFICATE-----\n" \ 
-"MIIDxTCCAq2gAwIBAgIQAqxcJmoLQJuPC3nyrkYldzANBgkqhkiG9w0BAQUFADBs\n" \ 
+"MIIEvjCCA6agAwIBAgIQBtjZBNVYQ0b2ii+nVCJ+xDANBgkqhkiG9w0BAQsFADBh\n" \ 
 "MQswCQYDVQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3\n" \ 
-"d3cuZGlnaWNlcnQuY29tMSswKQYDVQQDEyJEaWdpQ2VydCBIaWdoIEFzc3VyYW5j\n" \ 
-"ZSBFViBSb290IENBMB4XDTA2MTExMDAwMDAwMFoXDTMxMTExMDAwMDAwMFowbDEL\n" \ 
-"MAkGA1UEBhMCVVMxFTATBgNVBAoTDERpZ2lDZXJ0IEluYzEZMBcGA1UECxMQd3d3\n" \ 
-"LmRpZ2ljZXJ0LmNvbTErMCkGA1UEAxMiRGlnaUNlcnQgSGlnaCBBc3N1cmFuY2Ug\n" \ 
-"RVYgUm9vdCBDQTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAMbM5XPm\n" \ 
-"+9S75S0tMqbf5YE/yc0lSbZxKsPVlDRnogocsF9ppkCxxLeyj9CYpKlBWTrT3JTW\n" \ 
-"PNt0OKRKzE0lgvdKpVMSOO7zSW1xkX5jtqumX8OkhPhPYlG++MXs2ziS4wblCJEM\n" \ 
-"xChBVfvLWokVfnHoNb9Ncgk9vjo4UFt3MRuNs8ckRZqnrG0AFFoEt7oT61EKmEFB\n" \ 
-"Ik5lYYeBQVCmeVyJ3hlKV9Uu5l0cUyx+mM0aBhakaHPQNAQTXKFx01p8VdteZOE3\n" \ 
-"hzBWBOURtCmAEvF5OYiiAhF8J2a3iLd48soKqDirCmTCv2ZdlYTBoSUeh10aUAsg\n" \ 
-"EsxBu24LUTi4S8sCAwEAAaNjMGEwDgYDVR0PAQH/BAQDAgGGMA8GA1UdEwEB/wQF\n" \ 
-"MAMBAf8wHQYDVR0OBBYEFLE+w2kD+L9HAdSYJhoIAu9jZCvDMB8GA1UdIwQYMBaA\n" \ 
-"FLE+w2kD+L9HAdSYJhoIAu9jZCvDMA0GCSqGSIb3DQEBBQUAA4IBAQAcGgaX3Nec\n" \ 
-"nzyIZgYIVyHbIUf4KmeqvxgydkAQV8GK83rZEWWONfqe/EW1ntlMMUu4kehDLI6z\n" \ 
-"eM7b41N5cdblIZQB2lWHmiRk9opmzN6cN82oNLFpmyPInngiK3BD41VHMWEZ71jF\n" \ 
-"hS9OMPagMRYjyOfiZRYzy78aG6A9+MpeizGLYAiJLQwGXFK3xPkKmNEVX58Svnw2\n" \ 
-"Yzi9RKR/5CYrCsSXaQ3pjOLAEFe4yHYSkVXySGnYvCoCWw9E1CAx2/S6cCZdkGCe\n" \ 
-"vEsXCS+0yx5DaMkHJ8HSXPfqIbloEpw8nL+e/IBcm2PN7EeqJSdnoDfzAIJ9VNep\n" \ 
-"+OkuE6N36B9K\n" \ 
+"d3cuZGlnaWNlcnQuY29tMSAwHgYDVQQDExdEaWdpQ2VydCBHbG9iYWwgUm9vdCBD\n" \ 
+"QTAeFw0yMTA0MTQwMDAwMDBaFw0zMTA0MTMyMzU5NTlaME8xCzAJBgNVBAYTAlVT\n" \ 
+"MRUwEwYDVQQKEwxEaWdpQ2VydCBJbmMxKTAnBgNVBAMTIERpZ2lDZXJ0IFRMUyBS\n" \ 
+"U0EgU0hBMjU2IDIwMjAgQ0ExMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKC\n" \ 
+"AQEAwUuzZUdwvN1PWNvsnO3DZuUfMRNUrUpmRh8sCuxkB+Uu3Ny5CiDt3+PE0J6a\n" \ 
+"qXodgojlEVbbHp9YwlHnLDQNLtKS4VbL8Xlfs7uHyiUDe5pSQWYQYE9XE0nw6Ddn\n" \ 
+"g9/n00tnTCJRpt8OmRDtV1F0JuJ9x8piLhMbfyOIJVNvwTRYAIuE//i+p1hJInuW\n" \ 
+"raKImxW8oHzf6VGo1bDtN+I2tIJLYrVJmuzHZ9bjPvXj1hJeRPG/cUJ9WIQDgLGB\n" \ 
+"Afr5yjK7tI4nhyfFK3TUqNaX3sNk+crOU6JWvHgXjkkDKa77SU+kFbnO8lwZV21r\n" \ 
+"eacroicgE7XQPUDTITAHk+qZ9QIDAQABo4IBgjCCAX4wEgYDVR0TAQH/BAgwBgEB\n" \ 
+"/wIBADAdBgNVHQ4EFgQUt2ui6qiqhIx56rTaD5iyxZV2ufQwHwYDVR0jBBgwFoAU\n" \ 
+"A95QNVbRTLtm8KPiGxvDl7I90VUwDgYDVR0PAQH/BAQDAgGGMB0GA1UdJQQWMBQG\n" \ 
+"CCsGAQUFBwMBBggrBgEFBQcDAjB2BggrBgEFBQcBAQRqMGgwJAYIKwYBBQUHMAGG\n" \ 
+"GGh0dHA6Ly9vY3NwLmRpZ2ljZXJ0LmNvbTBABggrBgEFBQcwAoY0aHR0cDovL2Nh\n" \ 
+"Y2VydHMuZGlnaWNlcnQuY29tL0RpZ2lDZXJ0R2xvYmFsUm9vdENBLmNydDBCBgNV\n" \ 
+"HR8EOzA5MDegNaAzhjFodHRwOi8vY3JsMy5kaWdpY2VydC5jb20vRGlnaUNlcnRH\n" \ 
+"bG9iYWxSb290Q0EuY3JsMD0GA1UdIAQ2MDQwCwYJYIZIAYb9bAIBMAcGBWeBDAEB\n" \ 
+"MAgGBmeBDAECATAIBgZngQwBAgIwCAYGZ4EMAQIDMA0GCSqGSIb3DQEBCwUAA4IB\n" \ 
+"AQCAMs5eC91uWg0Kr+HWhMvAjvqFcO3aXbMM9yt1QP6FCvrzMXi3cEsaiVi6gL3z\n" \ 
+"ax3pfs8LulicWdSQ0/1s/dCYbbdxglvPbQtaCdB73sRD2Cqk3p5BJl+7j5nL3a7h\n" \ 
+"qG+fh/50tx8bIKuxT8b1Z11dmzzp/2n3YWzW2fP9NsarA4h20ksudYbj/NhVfSbC\n" \ 
+"EXffPgK2fPOre3qGNm+499iTcc+G33Mw+nur7SpZyEKEOxEXGlLzyQ4UfaJbcme6\n" \ 
+"ce1XR2bFuAJKZTRei9AqPCCcUZlM51Ke92sRKw2Sfh3oius2FkOH6ipjv3U/697E\n" \ 
+"A7sKPPcw7+uvTPyLNhBzPvOk\n" \ 
 "-----END CERTIFICATE-----\n";
+
+
+//===========================
+
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+#define SCREEN_WIDTH 128 // OLED display width, in pixels
+#define SCREEN_HEIGHT 64 // OLED display height, in pixels
+
+// Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
+// The pins for I2C are defined by the Wire-library. 
+// On an arduino UNO:       A4(SDA), A5(SCL)
+// On an arduino MEGA 2560: 20(SDA), 21(SCL)
+// On an arduino LEONARDO:   2(SDA),  3(SCL), ...
+#define OLED_RESET     4 // Reset pin # (or -1 if sharing Arduino reset pin)
+#define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+// ============================
+
+
 
 // Not sure if WiFiClientSecure checks the validity date of the certificate.
 // Setting clock just to be sure...
@@ -80,23 +109,73 @@ void setClock() {
 
 WiFiMulti WiFiMulti;
 
-void setup() {
 
-    Serial.begin(115200);
-    lcd.begin(16, 2); // 初始化 LCD，一行 16 的字元，共 2 行，預設開啟背光
-    for (int i = 0; i < 3; i++) {
-        lcd.backlight(); // 開啟背光
-        delay(250);
-        lcd.noBacklight(); // 關閉背光
-        delay(250);
+void LCD_display_data(double p25, double form, double temp, double humi)
+{
+  display.clearDisplay();
+  display.setTextSize(2);             
+  display.setTextColor(SSD1306_WHITE); // Draw white text
+  display.setCursor(0,0);
+
+  
+  display.print("PM25:");
+  display.println(p25);
+  
+  display.print("Form:");
+  display.println(form);
+
+  display.print("Temp:");  
+  display.println(temp);
+  
+  display.print("Humi:");
+  display.println(humi);
+
+  display.display();
+  //delay(2000);
+}
+
+
+void LCD_no_finger(){
+  display.clearDisplay();
+  display.setTextSize(3);
+  display.setTextColor(SSD1306_WHITE);             
+  display.setCursor(0,0);
+  display.println("Finger");
+  display.println("Please");
+  display.display();
+}
+
+void LCD_setup()
+{
+  if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS))
+  {
+    Serial.println(F("SSD1306 allocation failed"));
+    for (;;)
+    {
+      ; // Don't proceed, loop forever
     }
-    lcd.backlight();
+  }
 
+  // Show initial display buffer contents on the screen --
+  // the library initializes this with an Adafruit splash screen.
+  display.display();
+  delay(200); // Pause for 2 seconds
+  LCD_no_finger();
+}
+
+
+
+
+void setup() {
+  
+    Serial.begin(115200);
+    LCD_setup();
+    
     // Serial.setDebugOutput(true);
     Serial.println("\nStart");
     pmsSerial.begin(9600);
     pms.begin(pmsSerial);
-    //  pms.wakeUp();
+    pms.wakeUp();
     pms.setMode(PASSIVE);
 
     Serial.println();
@@ -104,12 +183,11 @@ void setup() {
     Serial.println();
 
     WiFi.mode(WIFI_STA);
+    WiFiMulti.addAP("puper", "*999888*");
     WiFiMulti.addAP("ggggg", "hhhh8888");
+    WiFiMulti.addAP("bbbbb", "5555dddd");
 
-    // wait for WiFi connection
-    lcd.clear();
-    lcd.setCursor(0, 0); // 設定游標位置在第一行行首
-    lcd.print("WiFi connecting.");
+  
 
     Serial.print("Waiting for WiFi to connect...");
     while ((WiFiMulti.run() != WL_CONNECTED)) {
@@ -118,39 +196,24 @@ void setup() {
     Serial.println(" connected");
     setClock();
 
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("WiFi OK.");
+ 
 }
 
-void print_lcd_data(unsigned int pm25, double HCHO, double tmp, double hum) {
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    // lcd.print("PM2:10 HCHO:0.15");
-    lcd.print(String("") + "PM2:" + pm25 + " HCHO:" + HCHO);
-    lcd.setCursor(0, 1);
-    // lcd.print("Tm:12.2 Hum:55.3");
-    lcd.print(String("") + "Tm:" + tmp + " Hm:" + hum);
-}
 
 void https_request(String url) {
     WiFiClientSecure *client = new WiFiClientSecure;
     if (client) {
         client->setCACert(rootCACertificate);
-
         {
             // Add a scoping block for HTTPClient https to make sure it is destroyed before WiFiClientSecure *client is
             HTTPClient https;
-
-            //       "https://api.thingspeak.com/update?api_key=JSZTG4B87AVJAUSI&field1=1&field2=2&field3=0.001&field4=25.3&field5=60"
-            String url = String("") + "https://api.thingspeak.com/update?api_key=JSZTG4B87AVJAUSI&field1=" + pms.getPmCf1(2.5) + "&field2=" + pms.getPmCf1(1.0) + "&field3=" + pms.getForm() + "&field4=" + pms.getTemp() + "&field5=" + pms.getHumi();
-
+            Serial.println(url);
             Serial.print("[HTTPS] begin...\n");
             if (https.begin(*client, url)) { // HTTPS
                 Serial.print("[HTTPS] GET...\n");
                 // start connection and send HTTP header
                 int httpCode = https.GET();
-
+                Serial.printf("[HTTPS] code: %d\r\n", httpCode);
                 // httpCode will be negative on error
                 if (httpCode > 0) {
                     // HTTP header has been send and Server response header has been handled
@@ -163,6 +226,7 @@ void https_request(String url) {
                     }
                 } else {
                     Serial.printf("[HTTPS] GET... failed, error: %s\n", https.errorToString(httpCode).c_str());
+                    ESP.restart();
                 }
 
                 https.end();
@@ -179,35 +243,29 @@ void https_request(String url) {
     }
 }
 
-void backlight_display(unsigned int pm25, double HCHO, double tmp, double hum) {
-
-    bool is_over_spec = false;
-     Serial.println(        turn_off_backlight);
-
-    if (pm25 > 40 || HCHO > 0.06 || hum>80){
-        is_over_spec = true;
-        turn_off_backlight = 600;
-    }
-
-    if (turn_off_backlight <= 0) {
-        lcd.noBacklight(); // 關閉背光
-    } else {
-        lcd.backlight(); // 開啟背光
-    }
-}
-
 void loop() {
-
+    Serial.println("debug:loop start");
+    
+    
     send_data_to_server = send_data_to_server + 1;
-    if(turn_off_backlight >0){
-        turn_off_backlight--;
-    }
+
 
     pms.request();
 
     if (!pms.read()) {
+        Serial.println("debug:pm read fail+");
+		pms_error = pms_error +1;
+		if(pms_error > 30){
+			ESP.restart();
+		}
+        delay(1000);
         return;
     }
+	else{
+		pms_error = 0;
+	}
+	
+	
     Serial.print("PM1.0(CF1)\t");
     Serial.print(pms.getPmCf1(1.0));
     Serial.println("ug/m3");
@@ -257,15 +315,20 @@ void loop() {
 
 // ======================WIFI=====================================
 
+    LCD_display_data(pms.getPmCf1(2.5),    pms.getForm() ,    pms.getTemp(),    pms.getHumi());  
+    
+
     if (send_data_to_server > 20) {
         setClock();
-        String url = String("") + "https://api.thingspeak.com/update?api_key=JSZTG4B87AVJAUSI&field1=" + pms.getPmCf1(2.5) + "&field2=" + pms.getPmCf1(1.0) + "&field3=" + pms.getForm() + "&field4=" + pms.getTemp() + "&field5=" + pms.getHumi();
+        String url = String("") + "https://api.thingspeak.com/update?api_key=1W08OWZCHPUB9IAX&field1=" + pms.getPmCf1(2.5) + "&field2=" + pms.getPmCf1(1.0) + "&field3=" + pms.getForm() + "&field4=" + pms.getTemp() + "&field5=" + pms.getHumi();
+        
         https_request(url);
         Serial.println();
         send_data_to_server =0;
     }
 
-    print_lcd_data(pms.getPmCf1(2.5), pms.getForm(), pms.getTemp(), pms.getHumi());
-    backlight_display(pms.getPmCf1(2.5), pms.getForm(), pms.getTemp(), pms.getHumi());
+    
+    
     delay(1000);
+    Serial.println("debug:loop done");
 }
